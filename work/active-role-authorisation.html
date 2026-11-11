@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Authorise on the active role | Abraham Raphael</title>
+<meta name="description" content="Case study: an access-control audit across a multi-service platform. Three defects in four services, why they stayed invisible, and the fix.">
+<meta name="theme-color" content="#0e1a24">
+<link rel="icon" href="../img/mark.svg" type="image/svg+xml">
+<link rel="preload" href="../fonts/IBMPlexSans-var.woff2" as="font" type="font/woff2" crossorigin>
+<script>(function(){var d=document.documentElement;d.classList.add("js");try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark"){d.setAttribute("data-theme",t);}}catch(e){}})();</script>
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/site.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site">
+  <div class="wrap head">
+    <a class="brand" href="../index.html"><img src="../img/mark.svg" alt="" width="28" height="28">Abraham Raphael <span class="tag">/measured</span></a>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>Menu</button>
+    <nav id="site-nav" aria-label="Main">
+      <ul>
+        <li><a href="../index.html#work" aria-current="page">Work</a></li>
+        <li><a href="../index.html#about">About</a></li>
+        <li><a href="../index.html#contact">Contact</a></li>
+      </ul>
+    </nav>
+    <button class="theme-toggle" type="button" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 2a6 6 0 0 1 0 12z" fill="currentColor"/></svg><span class="mode">system</span></button>
+  </div>
+</header>
+
+<main id="main">
+  <div class="wrap article">
+    <a class="back" href="../index.html#work">&larr; All work</a>
+    <p class="kicker">Case study &middot; Security, access control</p>
+    <h1>Authorise on the role that is active, not the role a user holds</h1>
+    <p class="lede">In September 2026 I audited how the services on our platform make authorisation decisions. Four of them were checking the wrong thing. None of them was failing loudly.</p>
+
+    <dl class="facts">
+      <dt>Scope</dt><dd>Every service on a multi-service platform that shares one identity provider</dd>
+      <dt>Found</dt><dd>Three defects, present in four services</dd>
+      <dt>Outcome</dt><dd>All four fixed, with tests that fail if the defects return</dd>
+    </dl>
+
+    <h2 style="margin-top:32px">How roles work on the platform</h2>
+    <p>A signed-in user's token describes their roles in four parts:</p>
+    <table>
+      <thead><tr><th>Part</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td>Held roles</td><td>Every role the user has been given. Most are dormant at any moment.</td></tr>
+        <tr><td>Ambient roles</td><td>Always on.</td></tr>
+        <tr><td>Assumed role</td><td>A step-up the user switches on for about 30 minutes, with an expiry time.</td></tr>
+        <tr><td>Effective roles</td><td>Ambient plus assumed: what the user is acting as <em>right now</em>.</td></tr>
+      </tbody>
+    </table>
+    <p>The rule is simple: authorise on effective roles, never on held roles. Holding an admin role you have not switched on should get you nothing.</p>
+
+    <h2>The three defects</h2>
+    <h3>1. The join</h3>
+    <p>Some services turned the role list into one string, such as <code>"Employee, Super Admin"</code>, and compared the whole string with the role they wanted. That two-role shape is exactly what a real company administrator carries, and it matched nothing.</p>
+    <h3>2. The spelling</h3>
+    <p>Configuration said <code>super_admin</code>; the identity provider sends <code>Super Admin</code>. A normaliser that only removed spaces still missed, because the underscore survived. One file even spelled the same role two different ways in two branches, so one of those branches could never run.</p>
+    <h3>3. Held versus active</h3>
+    <p>A dormant admin role was honoured as if it were switched on. This is the one that is a security issue: elevation should require the user to step up.</p>
+
+    <h2>Why nobody noticed</h2>
+    <p>The defects failed closed. A two-person approval gate on one product worked perfectly in demo mode and refused every real approver in production. That is never a security hole, but it is a feature that does not work, and nothing logged an error. A check that only ever says no looks exactly like a check doing its job.</p>
+
+    <h2>The fix</h2>
+    <p>One service on the platform already did this correctly, and more strictly than the specification: it rebuilt effective roles from their parts and re-checked the step-up's expiry. That matters because a token outlives the 30-minute window it may have been minted in. I copied the service that was right, not the document. Two rules now apply everywhere:</p>
+    <ul class="plain">
+      <li><strong>One spelling per role.</strong> Role names are compared after removing spaces, underscores and hyphens and lowering the case, so <code>Super Admin</code>, <code>super_admin</code> and <code>super-admin</code> are the same role.</li>
+      <li><strong>A step-up counts only while its window is open.</strong> No expiry, an unreadable expiry, or one in the past: no elevation.</li>
+    </ul>
+    <p>Every check now normalises role names the same way and asks only about effective roles. Each defect has a test that turns red if it comes back.</p>
+
+    <h2>What I took from it</h2>
+    <ul class="plain">
+      <li><strong>Fail closed, but fail visibly.</strong> A denial that should never happen deserves a log line.</li>
+      <li><strong>Copy the implementation that works,</strong> even when it disagrees with the document.</li>
+      <li><strong>When you fix a rule, find every other place that answers the same question.</strong> The same mistake was in four services.</li>
+    </ul>
+
+    <div class="next">
+      <p><strong>Next:</strong> <a href="csharp-to-fastapi.html">Moving services from C# to FastAPI</a></p>
+    </div>
+  </div>
+</main>
+
+<a class="to-top" href="#main" aria-label="Back to top" hidden>&uarr;</a>
+<footer class="site">
+  <div class="wrap">
+    <p>&copy; <span data-year>2026</span> Abraham Raphael &middot; <a href="../index.html#contact">Contact</a></p>
+  </div>
+</footer>
+</body>
+</html>

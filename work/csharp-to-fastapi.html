@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Moving services from C# to FastAPI | Abraham Raphael</title>
+<meta name="description" content="A short note on moving a platform's payment, affiliate and ticketing services from C#/ASP.NET Core to Python/FastAPI, with contract tests as the safety net.">
+<meta name="theme-color" content="#0e1a24">
+<link rel="icon" href="../img/mark.svg" type="image/svg+xml">
+<link rel="preload" href="../fonts/IBMPlexSans-var.woff2" as="font" type="font/woff2" crossorigin>
+<script>(function(){var d=document.documentElement;d.classList.add("js");try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark"){d.setAttribute("data-theme",t);}}catch(e){}})();</script>
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/site.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site">
+  <div class="wrap head">
+    <a class="brand" href="../index.html"><img src="../img/mark.svg" alt="" width="28" height="28">Abraham Raphael <span class="tag">/measured</span></a>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>Menu</button>
+    <nav id="site-nav" aria-label="Main">
+      <ul>
+        <li><a href="../index.html#work" aria-current="page">Work</a></li>
+        <li><a href="../index.html#about">About</a></li>
+        <li><a href="../index.html#contact">Contact</a></li>
+      </ul>
+    </nav>
+    <button class="theme-toggle" type="button" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 2a6 6 0 0 1 0 12z" fill="currentColor"/></svg><span class="mode">system</span></button>
+  </div>
+</header>
+
+<main id="main">
+  <div class="wrap article">
+    <a class="back" href="../index.html#work">&larr; All work</a>
+    <p class="kicker">Note &middot; C#, Python</p>
+    <h1>Moving services from C# to FastAPI</h1>
+    <p class="lede">The platform's payment, affiliate and ticketing services were first built in C# on ASP.NET Core. They now run on Python and FastAPI. This note covers how I approach a port like that, using the ticketing service as the example because its history is fully in my hands.</p>
+
+    <h2 style="margin-top:32px">The rule: the outside must not notice</h2>
+    <p>Other services and the frontend depend on a service's routes, status codes, response shapes and events. A port is successful when none of them can tell it happened. So the first commit of the FastAPI ticketing service was titled <em>Initial ticketing-fastapi baseline with parity tests</em>: the contract tests arrived with the code, not after it.</p>
+
+    <h2>What a contract test pins down</h2>
+    <p>Real examples from that suite:</p>
+    <ul class="plain">
+      <li>An operations endpoint called without a token returns <code>401</code>, never data.</li>
+      <li>The outbox statistics endpoint returns exactly <code>total</code>, <code>published</code>, <code>pending</code> and <code>failed</code>.</li>
+      <li>Replaying failed messages respects the limit the caller sends.</li>
+    </ul>
+    <p>None of these tests cares which language produced the answer. That is the point.</p>
+
+    <h2>Port the events with the endpoints</h2>
+    <p>A service talks through events as much as through HTTP. The first FastAPI commit already contained the event contracts, the outbox table, the publisher and the schema-discovery service. Porting the HTTP side first and the events later would have left a window where the service answered correctly and told nobody.</p>
+
+    <h2>What I would tell someone starting a port</h2>
+    <ul class="plain">
+      <li>Write the contract tests before the first route.</li>
+      <li>Port the events in the same step as the endpoints.</li>
+      <li>Make the new service report which version is running, so you always know which side of the port you are looking at.</li>
+      <li>Keep the old service until the new one has passed the same tests in production conditions.</li>
+    </ul>
+
+    <div class="next">
+      <p><strong>Back to:</strong> <a href="ticketing-service.html">A support ticketing service on FastAPI</a></p>
+    </div>
+  </div>
+</main>
+
+<a class="to-top" href="#main" aria-label="Back to top" hidden>&uarr;</a>
+<footer class="site">
+  <div class="wrap">
+    <p>&copy; <span data-year>2026</span> Abraham Raphael &middot; <a href="../index.html#contact">Contact</a></p>
+  </div>
+</footer>
+</body>
+</html>

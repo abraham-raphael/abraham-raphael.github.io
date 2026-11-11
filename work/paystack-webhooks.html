@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verifying payment webhooks in C# | Abraham Raphael</title>
+<meta name="description" content="Code sample: checking Paystack webhook signatures in a C# Clean Architecture payment service, and the one change I would make on review.">
+<meta name="theme-color" content="#0e1a24">
+<link rel="icon" href="../img/mark.svg" type="image/svg+xml">
+<link rel="preload" href="../fonts/IBMPlexSans-var.woff2" as="font" type="font/woff2" crossorigin>
+<script>(function(){var d=document.documentElement;d.classList.add("js");try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark"){d.setAttribute("data-theme",t);}}catch(e){}})();</script>
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/site.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site">
+  <div class="wrap head">
+    <a class="brand" href="../index.html"><img src="../img/mark.svg" alt="" width="28" height="28">Abraham Raphael <span class="tag">/measured</span></a>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>Menu</button>
+    <nav id="site-nav" aria-label="Main">
+      <ul>
+        <li><a href="../index.html#work" aria-current="page">Work</a></li>
+        <li><a href="../index.html#about">About</a></li>
+        <li><a href="../index.html#contact">Contact</a></li>
+      </ul>
+    </nav>
+    <button class="theme-toggle" type="button" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 2a6 6 0 0 1 0 12z" fill="currentColor"/></svg><span class="mode">system</span></button>
+  </div>
+</header>
+
+<main id="main">
+  <div class="wrap article">
+    <a class="back" href="../index.html#work">&larr; All work</a>
+    <p class="kicker">Code sample &middot; C#, .NET</p>
+    <h1>Verifying payment webhooks in C#</h1>
+    <p class="lede">A school payment service I built in December 2025 with Clean Architecture: fees in through Paystack, staff salaries out. Here is the code that decides whether a payment notification is genuine, and the change I would make to it today.</p>
+
+    <dl class="facts">
+      <dt>Project</dt><dd>School payment service, my own; the code is public</dd>
+      <dt>Stack</dt><dd>C#, ASP.NET Core, MediatR, MassTransit, Entity Framework Core, SQL Server, Paystack</dd>
+      <dt>Code</dt><dd><a href="https://github.com/abraham-raphael/Payment_Service" rel="noopener">github.com/abraham-raphael/Payment_Service</a></dd>
+    </dl>
+
+    <h2 style="margin-top:32px">The problem</h2>
+    <p>When a parent pays school fees, Paystack calls the service back with a webhook saying the charge succeeded. Anyone on the internet can send a request to that address, so the service has to prove each one came from Paystack before it marks a fee as paid. Paystack signs every webhook body with HMAC-SHA512 using the merchant's secret key and sends the result in a header.</p>
+
+    <h2>The code as written</h2>
+<pre><code>public bool VerifySignature(string body, string signature)
+{
+    var secretKey = config["Paystack:SecretKey"];
+    if (string.IsNullOrEmpty(secretKey)) return false;
+
+    var keyBytes = Encoding.UTF8.GetBytes(secretKey);
+    var bodyBytes = Encoding.UTF8.GetBytes(body);
+
+    using var hmac = new HMACSHA512(keyBytes);
+    var hashBytes = hmac.ComputeHash(bodyBytes);
+
+    var hash = BitConverter.ToString(hashBytes).Replace("-", "").ToLower();
+
+    return hash == signature;
+}</code></pre>
+
+    <h2>What it gets right</h2>
+    <ul class="plain">
+      <li><strong>It fails closed.</strong> With no secret key configured, every webhook is rejected rather than accepted.</li>
+      <li><strong>The check comes first.</strong> The handler verifies the signature before it parses the payload or touches the database.</li>
+      <li><strong>It is safe to receive twice.</strong> A payment moves from <code>Pending</code> to <code>Successful</code> only once, so a repeated webhook changes nothing.</li>
+    </ul>
+
+    <h2>What I would change</h2>
+    <p>The last line compares two strings with <code>==</code>, which stops at the first character that differs. In principle that lets an attacker learn, from response times, how much of a forged signature is correct. The fix is a comparison that takes the same time whatever the input, plus explicit handling of a missing or malformed header:</p>
+<pre><code>public bool VerifySignature(string body, string? signature)
+{
+    var secretKey = config["Paystack:SecretKey"];
+    if (string.IsNullOrEmpty(secretKey) || string.IsNullOrEmpty(signature)) return false;
+
+    using var hmac = new HMACSHA512(Encoding.UTF8.GetBytes(secretKey));
+    var expected = hmac.ComputeHash(Encoding.UTF8.GetBytes(body));
+
+    byte[] received;
+    try { received = Convert.FromHexString(signature); }
+    catch (FormatException) { return false; }
+
+    // Takes the same time however many bytes match, so it leaks nothing.
+    return CryptographicOperations.FixedTimeEquals(expected, received);
+}</code></pre>
+    <p>Two smaller changes would follow. Salary transfers are matched to the ledger with <code>Contains</code> on a description, where an exact reference column would be safer. And the success event is published after the database save in a separate step, which can lose the event if the process stops in between; a transactional outbox, the pattern I use in the <a href="ticketing-service.html">ticketing service</a>, closes that gap.</p>
+
+    <div class="next">
+      <p><strong>Back to:</strong> <a href="../index.html#work">All work</a></p>
+    </div>
+  </div>
+</main>
+
+<a class="to-top" href="#main" aria-label="Back to top" hidden>&uarr;</a>
+<footer class="site">
+  <div class="wrap">
+    <p>&copy; <span data-year>2026</span> Abraham Raphael &middot; <a href="../index.html#contact">Contact</a></p>
+  </div>
+</footer>
+</body>
+</html>

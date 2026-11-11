@@ -1,0 +1,5 @@
+# Private notes: never publish
+CHECKLIST.md
+*.tmp
+Thumbs.db
+desktop.ini

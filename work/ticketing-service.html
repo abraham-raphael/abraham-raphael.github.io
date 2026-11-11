@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A support ticketing service on FastAPI | Abraham Raphael</title>
+<meta name="description" content="Case study: a FastAPI support ticketing service for a multi-product platform. Event-driven with Kafka and a transactional outbox, role-based access control, 151 automated tests.">
+<meta name="theme-color" content="#0e1a24">
+<link rel="icon" href="../img/mark.svg" type="image/svg+xml">
+<link rel="preload" href="../fonts/IBMPlexSans-var.woff2" as="font" type="font/woff2" crossorigin>
+<script>(function(){var d=document.documentElement;d.classList.add("js");try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark"){d.setAttribute("data-theme",t);}}catch(e){}})();</script>
+<link rel="stylesheet" href="../css/style.css">
+<script src="../js/site.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site">
+  <div class="wrap head">
+    <a class="brand" href="../index.html"><img src="../img/mark.svg" alt="" width="28" height="28">Abraham Raphael <span class="tag">/measured</span></a>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>Menu</button>
+    <nav id="site-nav" aria-label="Main">
+      <ul>
+        <li><a href="../index.html#work" aria-current="page">Work</a></li>
+        <li><a href="../index.html#about">About</a></li>
+        <li><a href="../index.html#contact">Contact</a></li>
+      </ul>
+    </nav>
+    <button class="theme-toggle" type="button" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 2a6 6 0 0 1 0 12z" fill="currentColor"/></svg><span class="mode">system</span></button>
+  </div>
+</header>
+
+<main id="main">
+  <div class="wrap article">
+    <a class="back" href="../index.html#work">&larr; All work</a>
+    <p class="kicker">Case study &middot; Python, FastAPI</p>
+    <h1>A support ticketing service on FastAPI</h1>
+    <p class="lede">The service behind customer support for a multi-product SaaS platform. I own it end to end: all 42 commits in the repository, from April to September 2026, are mine.</p>
+
+    <dl class="facts">
+      <dt>Role</dt><dd>Developer and owner of the service</dd>
+      <dt>Stack</dt><dd>Python, FastAPI, SQLAlchemy 2, PostgreSQL, Redis, Apache Kafka (aiokafka), pytest</dd>
+      <dt>Size</dt><dd>151 automated tests, 91 Python files, a React/Vite portal in front</dd>
+    </dl>
+
+    <h2 style="margin-top:32px">The problem</h2>
+    <p>A platform with several products needs one place where support happens. A customer must raise a ticket against the right brand, product and plan. Staff need to pick a ticket up, work it to resolution, and sometimes raise one on a customer's behalf. Support staff need access that is narrow, checkable and never accidentally broader than intended.</p>
+
+    <h2>What it does</h2>
+    <ul class="plain">
+      <li>Customers raise tickets with a product and plan that the service validates, using a brand, product and plan taxonomy mirrored from the platform's product catalogue.</li>
+      <li>Staff pick tickets up, work them to resolved, and can raise a ticket on behalf of a customer.</li>
+      <li>Attachments and a single-customer view for staff.</li>
+      <li>Staff access is gated by an allow-list of registered staff, restricted to the company's email domain.</li>
+    </ul>
+
+    <h2>How it is built</h2>
+    <p>The code is layered: routes call services, services call repositories, repositories own the models. Events leave the service through a <strong>transactional outbox</strong>: a ticket change and the message announcing it are written through the same database session, and a worker publishes the message to Kafka afterwards. If the broker is down, the message waits in the outbox instead of being lost.</p>
+    <p>Data owned by other services reaches this one through Kafka consumers that keep local projections, so the service holds its own copy of what it needs. A separate worker handles schema discovery.</p>
+
+    <h2>Decisions worth explaining</h2>
+    <h3>The broker is not a boot dependency</h3>
+    <p>Kafka consumers start in the background, and fetching broker credentials still works when Redis is unavailable. Early commits fixed exactly this: a messaging problem must degrade the projections, not take the API down.</p>
+
+    <h3>Fail closed, and say nothing extra in production</h3>
+    <p>The interactive API documentation is removed in production and the machine-readable schema is behind a token. Authorisation decisions use the roles a user is acting in right now, not every role they hold; the <a href="active-role-authorisation.html">role audit case study</a> explains why that distinction matters.</p>
+
+    <h3>You can tell what is running</h3>
+    <p>A service that cannot say which version it is running forces you to guess during an incident. This one carries a source stamp and its logs reach a place you can read them. A commit titled <em>make the running service observable</em> added both.</p>
+
+    <h3>Tests that name the assumption they protect</h3>
+    <p>I write tests against the class of bug, not just the instance. Two commit titles show the habit:</p>
+    <blockquote>test(entity-version): fail the day the identity mirror gains a reader</blockquote>
+    <blockquote>test(session): fail the day the embedded pane waits for a token again</blockquote>
+    <p>Each test is a tripwire: it passes today and goes red the day someone changes the assumption it protects, so the change has to be made on purpose.</p>
+
+    <h2>Timeline</h2>
+    <table>
+      <thead><tr><th>When</th><th>What changed</th></tr></thead>
+      <tbody>
+        <tr><td>April 2026</td><td>First baseline with API contract tests; Kafka projections and credential fetch stabilised</td></tr>
+        <tr><td>May 2026</td><td>Seed data, production deployment support, React/Vite portal</td></tr>
+        <tr><td>July 2026</td><td>Registered-staff gate; backend hardening of auth, attachments and the single-customer view</td></tr>
+        <tr><td>August 2026</td><td>Public API docs removed in production; brand, product and plan picker; staff pick-up and resolution</td></tr>
+        <tr><td>September 2026</td><td>Role-audit fixes; staff can raise tickets for customers; cookie-based sign-in</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Proof</h2>
+    <p>The repository is private, because it belongs to my employer. I am happy to walk through the code, the tests and the commit history in an interview.</p>
+
+    <div class="next">
+      <p><strong>Next:</strong> <a href="active-role-authorisation.html">Authorise on the role that is active, not the role a user holds</a></p>
+    </div>
+  </div>
+</main>
+
+<a class="to-top" href="#main" aria-label="Back to top" hidden>&uarr;</a>
+<footer class="site">
+  <div class="wrap">
+    <p>&copy; <span data-year>2026</span> Abraham Raphael &middot; <a href="../index.html#contact">Contact</a></p>
+  </div>
+</footer>
+</body>
+</html>
